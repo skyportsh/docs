@@ -1,85 +1,100 @@
 ---
-title: Additional Configuration
+title: Daemon Configuration
 description: Understand skyportd configuration files, environment overrides, and TLS behavior.
 ---
 
-`skyportd` uses TOML-based configuration files.
-
 ## File layout
-
-A common layout is:
 
 ```text
 /etc/skyportd/
 ├── config/
-│   └── local.toml
-└── skyportd.db
+│   ├── default.toml    # default settings (shipped with skyportd)
+│   └── local.toml      # written by skyportd during enrollment
+├── volumes/            # server data volumes
+└── skyportd            # the daemon binary
 ```
 
-In normal usage, you do **not** need to manually create and fill out a config file before starting the daemon.
+## Configuration files
 
-On first boot, `skyportd` asks for the panel URL and configuration token, then writes `config/local.toml` for you.
+`skyportd` loads configuration in order:
 
-## `local.toml`
+1. `config/default.toml` — default values
+2. `config/local.toml` — overrides written during enrollment
+3. Environment variables — highest priority overrides
 
-`local.toml` is the main daemon config file. It is written and updated by `skyportd` during enrollment and normal operation.
+In normal usage, you do **not** need to manually edit these files. The daemon writes `local.toml` during enrollment and updates it as needed.
 
-Most users should treat this file as daemon-managed state, not something they need to hand-edit often.
-
-Important sections:
+## Sections
 
 ### `[daemon]`
 
-- `name` — display name for the daemon process
-- `uuid` — bootstrap UUID, later replaced with the panel-issued UUID
-- `tick_interval` — heartbeat-style internal tick interval
-- `shutdown_timeout` — graceful shutdown timeout
+| Key | Description | Default |
+| --- | --- | --- |
+| `name` | Display name | `skyportd` |
+| `uuid` | Daemon UUID (set during enrollment) | `00000000-...` |
+| `tick_interval` | Internal tick interval | `5s` |
+| `shutdown_timeout` | Graceful shutdown timeout | `30s` |
 
 ### `[panel]`
 
-This section stores the panel URL and the credentials `skyportd` uses after enrollment.
+Stores the panel URL and credentials after enrollment. Managed automatically.
 
 ### `[logging]`
 
-- `level` — log level such as `info` or `debug`
-- `format` — `pretty` or `json`
+| Key | Options | Default |
+| --- | --- | --- |
+| `level` | `debug`, `info`, `warn`, `error` | `info` |
+| `format` | `pretty`, `json` | `pretty` |
+
+Use `json` format for centralized logging systems.
 
 ### `[runtime]`
 
-- `worker_threads` — number of runtime worker threads; `0` lets Tokio choose
+| Key | Description | Default |
+| --- | --- | --- |
+| `worker_threads` | Tokio worker threads (`0` = auto) | `0` |
 
 ### `[node]`
 
-This section contains the node settings the daemon should use, including hostname, ports, SSL mode, and optional TLS certificate paths.
+Node-specific settings received from the panel: hostname, ports, SSL mode, TLS paths. Written automatically during enrollment.
 
 ## Environment variable overrides
 
-`skyportd` also supports environment-variable based overrides using the prefix `SKYPORT_DAEMON`.
-
-Examples:
+Use the prefix `SKYPORT_DAEMON` with double underscores as separators:
 
 ```bash
 export SKYPORT_DAEMON__PANEL__URL=https://panel.example.com
-export SKYPORT_DAEMON__PANEL__CONFIGURATION_TOKEN=your-token-here
+export SKYPORT_DAEMON__PANEL__CONFIGURATION_TOKEN=your-token
+export SKYPORT_DAEMON__LOGGING__LEVEL=debug
 ```
 
 ## TLS behavior
 
-When `use_ssl = true`, the daemon expects certificate paths.
-
-It first checks the default Let's Encrypt layout for the node FQDN:
+When SSL is enabled for a node, the daemon checks default Let's Encrypt paths:
 
 ```text
 /etc/letsencrypt/live/<fqdn>/fullchain.pem
 /etc/letsencrypt/live/<fqdn>/privkey.pem
 ```
 
-If those files are missing, the daemon asks for the paths interactively and stores them in `config/local.toml`.
+If those files exist, they are used automatically. If not, the daemon prompts for custom paths interactively.
 
-## Local state database
+## CLI flags
 
-`skyportd` stores local runtime state in `skyportd.db`. Treat it as part of the daemon's working data and back it up before major upgrades.
+| Flag | Description |
+| --- | --- |
+| `--configure` | Clear enrollment and re-run the setup prompt |
+| `--debug` | Enable verbose debug logging |
+| `--help` | Show help |
 
-## Logging recommendation
+## Reconfiguring
 
-For local debugging, `pretty` logs are great. For centralized logging systems, switch to `json`.
+To re-enroll the daemon with a different panel or token:
+
+```bash
+cd /etc/skyportd
+sudo systemctl stop skyportd
+sudo ./skyportd --configure
+```
+
+This clears the stored credentials and restarts the interactive enrollment flow.

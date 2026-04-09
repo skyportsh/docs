@@ -51,7 +51,7 @@ export default defineConfig({
 				{
 					label: 'Tutorials',
 					items: [
-						{ label: 'Setting up PostgreSQL', slug: 'tutorials/postgresql-setup' },
+						{ label: 'Setting up MySQL', slug: 'tutorials/mysql-setup' },
 						{ label: 'Creating SSL Certificates', slug: 'tutorials/creating-ssl-certificates' },
 					],
 				},

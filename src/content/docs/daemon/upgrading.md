@@ -1,48 +1,50 @@
 ---
 title: Upgrading skyportd
-description: Replace the daemon binary safely and restart the node service.
+description: Update the daemon binary and restart the service.
 ---
 
-Keep `skyportd` close to your panel version. The daemon checks compatibility with the panel, so do not treat it as a completely independent component.
+Keep `skyportd` close to your panel version. The daemon checks compatibility with the panel during enrollment and runtime, so mismatched versions may cause sync failures.
 
 ## 1. Back up local state
 
-Before upgrading, back up:
-
-- `/etc/skyportd/config/`
-- `/etc/skyportd/skyportd.db` if you keep the working directory there
-- your service unit if you customized it
+```bash
+sudo cp -r /etc/skyportd/config /etc/skyportd/config.backup
+```
 
 ## 2. Stop the service
 
 ```bash
-sudo systemctl stop skyportd.service
+sudo systemctl stop skyportd
 ```
 
-## 3. Download the latest binary
+## 3. Download the new binary
 
 ```bash
-sudo curl -fsSL https://github.com/skyportsh/skyportd/releases/latest/download/skyportd -o /usr/local/bin/skyportd
-sudo chmod +x /usr/local/bin/skyportd
+# For x86_64:
+sudo curl -fsSL https://github.com/skyportsh/skyportd/releases/latest/download/skyportd-linux-x86_64 \
+    -o /etc/skyportd/skyportd
+sudo chmod +x /etc/skyportd/skyportd
 ```
 
-## 4. Start the service again
+For aarch64 or riscv64, replace the binary name accordingly.
+
+## 4. Start the service
 
 ```bash
-sudo systemctl start skyportd.service
+sudo systemctl start skyportd
 ```
 
-## 5. Check logs
+## 5. Verify
 
 ```bash
-journalctl -u skyportd -n 100 --no-pager
+journalctl -u skyportd -n 50 --no-pager
 ```
 
-If the daemon refuses to connect because of a compatibility check, update the panel to the matching release line first.
+If the daemon refuses to connect due to a version mismatch, update the panel first.
 
-## Zero-drama upgrade checklist
+## Upgrade checklist
 
-- read the release notes
-- upgrade the panel first if required
-- update one node daemon and verify it
-- roll out to the rest of your nodes
+1. Read the release notes
+2. Upgrade the panel first if required
+3. Update one node and verify it
+4. Roll out to remaining nodes

@@ -1,23 +1,24 @@
 ---
 title: Webserver Configuration
-description: Put Nginx in front of the Skyport panel and serve Octane safely in production.
+description: Configure Nginx as a reverse proxy in front of the Skyport panel.
 ---
 
-The Skyport panel should normally run behind a reverse proxy.
+:::note
+If you used the automatic installer, Nginx is already configured. This page is for manual installations only.
+:::
 
-A common production layout is:
+The panel runs on Laravel Octane (Swoole) which listens on `127.0.0.1:8000`. Nginx sits in front as a reverse proxy to handle SSL termination and public traffic.
 
-- Nginx listening on **80/443**
-- Octane listening on **127.0.0.1:8000**
-- TLS terminated by Nginx
+## With SSL (recommended)
 
-## Why proxy Octane?
+First, obtain a certificate:
 
-This keeps your public edge simple while allowing Octane and Swoole to stay on a private loopback port.
+```bash
+sudo apt install -y certbot
+sudo certbot certonly --standalone -d panel.example.com
+```
 
-## Example Nginx configuration
-
-Update paths and domains to match your environment.
+Then create `/etc/nginx/sites-available/skyport.conf`:
 
 ```nginx
 server {
@@ -27,18 +28,19 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
     server_name panel.example.com;
-
-    root /var/www/skyport/public;
-    index index.php;
 
     ssl_certificate /etc/letsencrypt/live/panel.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
 
-    client_max_body_size 100m;
+    root /var/www/skyport/public;
+    client_max_body_size 256m;
 
     location / {
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -46,42 +48,78 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_pass http://127.0.0.1:8000;
-    }
-
-    location = /favicon.ico {
-        access_log off;
-        log_not_found off;
+        proxy_buffering off;
     }
 }
 ```
 
-## Things to verify
+## Without SSL (port-based)
 
-After reloading Nginx, verify that:
+Create `/etc/nginx/sites-available/skyport.conf`:
 
-- `https://panel.example.com` loads
-- static assets load correctly
-- login and registration pages work
-- websocket and long-running requests are not blocked
+```nginx
+server {
+    listen 8080;
+    server_name _;
 
-## Firewall guidance
+    root /var/www/skyport/public;
+    client_max_body_size 256m;
 
-Open only what you need publicly on the panel host:
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+    }
+}
+```
 
-- `80/tcp`
-- `443/tcp`
+## Enable the site
 
-Do **not** expose the Octane port publicly unless you have a specific reason to.
+```bash
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/skyport.conf /etc/nginx/sites-enabled/skyport.conf
+sudo nginx -t
+sudo systemctl restart nginx
+```
 
-## If you are behind Cloudflare or another proxy
+## Important `.env` settings
 
-Make sure:
+These must be set correctly or assets and links will break:
 
-- `APP_URL` matches the public HTTPS URL
-- forwarded headers are passed correctly
-- websocket upgrades are allowed
+```dotenv
+# Must match your public URL exactly
+APP_URL=https://panel.example.com
 
-## After the webserver is working
+# Required — tells Laravel to trust the Nginx proxy headers
+TRUSTED_PROXIES=*
 
-Continue with [Additional Configuration](/panel/additional-configuration/) to set up service units and production process management.
+# Required — ensures SSR renders asset URLs with the correct scheme and host
+ASSET_URL=https://panel.example.com
+```
+
+Without `TRUSTED_PROXIES`, Laravel won't detect HTTPS behind the proxy. Without `ASSET_URL`, the SSR renderer generates incorrect asset URLs (typically `http://` instead of `https://`), causing mixed content errors.
+
+## Firewall
+
+Open only what you need:
+
+- **80/tcp** and **443/tcp** for the panel
+- Do **not** expose port 8000 (Octane) directly
+
+## Behind Cloudflare or another CDN
+
+If you put the panel behind Cloudflare:
+
+- Set `APP_URL` to the public HTTPS URL
+- Ensure websocket upgrades are allowed (required for server console)
+- Keep `TRUSTED_PROXIES=*` to accept forwarded headers
+
+## Next steps
+
+Continue with [Additional Configuration](/panel/additional-configuration/) to set up systemd services.

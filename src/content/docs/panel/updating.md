@@ -1,22 +1,19 @@
 ---
 title: Updating the Panel
-description: Safely update the Skyport panel and restart supporting services.
+description: Safely update the Skyport panel to a new version.
 ---
 
 Before updating, read the release notes for the version you are moving to.
-
-## Recommended update flow
 
 ## 1. Back up your data
 
 At minimum, back up:
 
-- your database
+- Your database (SQLite file or MySQL dump)
 - `.env`
-- any custom reverse proxy or service files
-- uploaded or generated assets if you store them locally
+- Any custom Nginx or service files
 
-## 2. Put the panel into maintenance mode
+## 2. Enter maintenance mode
 
 ```bash
 cd /var/www/skyport
@@ -30,13 +27,17 @@ git fetch --all --tags
 git pull --ff-only
 ```
 
-## 4. Update dependencies and build assets
+## 4. Update dependencies and rebuild
 
 ```bash
-composer install --no-dev --optimize-autoloader
-bun install --frozen-lockfile
-bun run build
+COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
+bun install
+bun run build:ssr
 ```
+
+:::note
+Always use `build:ssr` to rebuild both the client and server-side rendering bundles.
+:::
 
 ## 5. Run database migrations
 
@@ -44,23 +45,25 @@ bun run build
 php artisan migrate --force
 ```
 
-## 6. Refresh caches
+## 6. Regenerate routes
+
+```bash
+php artisan wayfinder:generate --with-form --no-interaction
+```
+
+## 7. Clear caches
 
 ```bash
 php artisan optimize:clear
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
 ```
 
-## 7. Restart services
+## 8. Restart services
 
 ```bash
-sudo systemctl restart skyport-panel.service
-sudo systemctl restart skyport-queue.service
+sudo systemctl restart skyport-panel skyport-queue skyport-ssr
 ```
 
-## 8. Bring the panel back online
+## 9. Exit maintenance mode
 
 ```bash
 php artisan up
@@ -68,6 +71,6 @@ php artisan up
 
 ## Also update your daemons
 
-Do not leave `skyportd` far behind the panel version. The daemon performs compatibility checks during enrollment and runtime sync, so matching release lines are strongly recommended.
+Keep `skyportd` close to the panel version. The daemon performs compatibility checks, so mismatched versions may cause enrollment or sync failures.
 
 See [Upgrading skyportd](/daemon/upgrading/).

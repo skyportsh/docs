@@ -1,164 +1,178 @@
 ---
 title: Getting Started
-description: Install the Skyport panel for a production deployment.
+description: Install the Skyport panel using the automatic installer or a manual setup.
 ---
 
-This guide covers a recommended production-style installation of the Skyport panel.
+## Automatic installation (recommended)
 
-## Recommended software versions
+The fastest way to install the panel is with the official installer script. It handles all dependencies, configuration, and service setup interactively.
 
-- **Ubuntu 24.04 LTS** or **Debian 12**
-- **PHP 8.4**
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/skyportsh/installer/main/install-panel.sh)
+```
+
+The installer will ask you to choose:
+
+- **Release channel** — stable (latest release) or bleeding edge (main branch)
+- **Web configuration** — domain with Let's Encrypt SSL, or a plain port
+- **Database** — SQLite (simple, zero setup) or MySQL/MariaDB
+- **Admin account** — name, email, and password for the first admin user
+
+Once complete, the installer sets up three systemd services:
+
+| Service | Purpose |
+| --- | --- |
+| `skyport-panel` | Laravel Octane (Swoole) on port 8000 |
+| `skyport-queue` | Background job processing |
+| `skyport-ssr` | Inertia server-side rendering |
+
+It also configures Nginx as a reverse proxy with optional SSL.
+
+After the installer finishes, your panel is live and you can log in immediately.
+
+---
+
+## Manual installation
+
+If you prefer to install everything yourself, follow the steps below.
+
+### Requirements
+
+- **Ubuntu 22.04/24.04** or **Debian 11/12/13**
+- **PHP 8.4** with extensions: cli, curl, mbstring, xml, zip, bcmath, sqlite3, mysql, swoole, gd, intl
 - **Composer 2**
 - **Bun 1.3+**
-- **PostgreSQL 16+**
-- **Redis 7+**
+- **Node.js 22+** (for Inertia SSR)
 - **Nginx**
-- **Laravel Octane with Swoole**
 
-## Recommended architecture
+### 1. Install system packages
 
-For production, we strongly recommend:
-
-- **PostgreSQL** as the main database
-- **Redis** for cache, sessions, and queues
-- **Octane + Swoole** behind Nginx
-- a dedicated machine or VM for each node daemon
-
-## Required PHP extensions
-
-Install the standard Laravel extensions plus the ones commonly needed for this stack:
-
-- `bcmath`
-- `curl`
-- `ctype`
-- `dom`
-- `fileinfo`
-- `mbstring`
-- `openssl`
-- `pcntl`
-- `pdo_pgsql`
-- `redis`
-- `session`
-- `tokenizer`
-- `xml`
-- `zip`
-- `swoole`
-
-## 1. Install system packages
-
-The exact package names vary by distribution, but your host should have:
+**Ubuntu:**
 
 ```bash
 sudo apt update
-sudo apt install -y git unzip curl ca-certificates nginx redis-server postgresql postgresql-contrib
+sudo apt install -y software-properties-common curl git unzip nginx
+sudo add-apt-repository -y ppa:ondrej/php
+sudo apt update
+sudo apt install -y php8.4-cli php8.4-common php8.4-curl php8.4-mbstring \
+    php8.4-xml php8.4-zip php8.4-bcmath php8.4-sqlite3 php8.4-mysql \
+    php8.4-swoole php8.4-readline php8.4-gd php8.4-intl
 ```
 
-Then install PHP 8.4, Composer, Bun, and the Swoole extension using your preferred package sources.
+**Debian:**
 
-## 2. Clone the panel
+```bash
+sudo apt update
+sudo apt install -y curl git unzip nginx apt-transport-https gnupg2 ca-certificates lsb-release
+curl -fsSL https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /usr/share/keyrings/sury-php.gpg
+echo "deb [signed-by=/usr/share/keyrings/sury-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/sury-php.list
+sudo apt update
+sudo apt install -y php8.4-cli php8.4-common php8.4-curl php8.4-mbstring \
+    php8.4-xml php8.4-zip php8.4-bcmath php8.4-sqlite3 php8.4-mysql \
+    php8.4-swoole php8.4-readline php8.4-gd php8.4-intl
+```
+
+### 2. Install Composer, Bun, and Node.js
+
+```bash
+# Composer
+curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Bun
+curl -fsSL https://bun.sh/install | bash
+sudo ln -sf ~/.bun/bin/bun /usr/local/bin/bun
+
+# Node.js 22
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
+sudo apt install -y nodejs
+```
+
+### 3. Download the panel
 
 ```bash
 sudo mkdir -p /var/www/skyport
-sudo chown "$USER":"$USER" /var/www/skyport
 cd /var/www/skyport
-
-git clone https://github.com/skyportsh/panel.git .
+sudo git clone --depth 1 https://github.com/skyportsh/panel.git .
 ```
 
-## 3. Install PHP and frontend dependencies
+### 4. Install dependencies
 
 ```bash
-composer install --no-dev --optimize-autoloader
-bun install --frozen-lockfile
+sudo COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader
+sudo bun install
 ```
 
-## 4. Create your environment file
+### 5. Configure the environment
 
 ```bash
-cp .env.example .env
+sudo cp .env.example .env
+sudo php artisan key:generate --no-interaction
 ```
 
-At minimum, update these values for production:
+Edit `.env` for production:
 
 ```dotenv
-APP_NAME=Skyport
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://panel.example.com
 
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_DATABASE=skyport
-DB_USERNAME=skyport
-DB_PASSWORD=change-me
-
-CACHE_STORE=redis
-SESSION_DRIVER=redis
-QUEUE_CONNECTION=redis
-
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_PASSWORD=null
-
-LOG_CHANNEL=stack
-LOG_LEVEL=info
+DB_CONNECTION=sqlite
 
 OCTANE_SERVER=swoole
+TRUSTED_PROXIES=*
+ASSET_URL=https://panel.example.com
 ```
 
-## 5. Generate the application key and migrate
+For MySQL instead of SQLite, set:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=skyport
+DB_USERNAME=skyport
+DB_PASSWORD=your-password
+```
+
+For SQLite, create the database file:
 
 ```bash
-php artisan key:generate
-php artisan migrate --force
+sudo touch database/database.sqlite
 ```
 
-## 6. Build assets
+### 6. Run migrations and build assets
 
 ```bash
-bun run build
+sudo php artisan migrate --force --no-interaction
+sudo php artisan wayfinder:generate --with-form --no-interaction
+sudo bun run build:ssr
 ```
 
-## 7. Start the panel with Octane
+:::note
+Use `build:ssr` (not `build`) to generate both the client bundle and the server-side rendering bundle.
+:::
 
-For a first boot test:
+### 7. Create an admin user
 
 ```bash
-php artisan octane:start --server=swoole --host=127.0.0.1 --port=8000
+sudo php artisan user:create --name="Admin" --email="admin@example.com" --password="YourPassword" --admin --no-interaction
 ```
 
-If the app loads on port `8000`, continue to the webserver configuration step and place Nginx in front of it.
-
-## 8. Create your first account
-
-Skyport includes a registration flow, so you can create the first account through the web UI at `/register`.
-
-If you need to promote that first user to admin manually, use Tinker:
+### 8. Set permissions
 
 ```bash
-php artisan tinker
+sudo chown -R www-data:www-data /var/www/skyport
+sudo chmod -R 755 storage bootstrap/cache
 ```
 
-```php
-$user = App\Models\User::where('email', 'you@example.com')->first();
-$user->is_admin = true;
-$user->save();
-```
-
-## 9. Keep the queue running
-
-Even if the panel boots successfully, background work still needs a worker process in production.
-
-A simple foreground check:
+For SQLite, also ensure the database directory is writable:
 
 ```bash
-php artisan queue:work --tries=1 --timeout=0
+sudo chown www-data:www-data database database/database.sqlite
+sudo chmod 775 database
+sudo chmod 664 database/database.sqlite
 ```
 
-You will convert this into a `systemd` service in [Additional Configuration](/panel/additional-configuration/).
+### 9. Next steps
 
-## Next step
-
-Continue with [Webserver Configuration](/panel/webserver-configuration/).
+Continue with [Webserver Configuration](/panel/webserver-configuration/) to set up Nginx, then [Additional Configuration](/panel/additional-configuration/) for systemd services.

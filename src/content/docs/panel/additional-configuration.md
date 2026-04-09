@@ -1,130 +1,176 @@
 ---
 title: Additional Configuration
-description: Production tuning for Redis, Octane, workers, and long-running services.
+description: Set up systemd services, environment tuning, and maintenance commands.
 ---
 
-Once the panel is installed and reachable through Nginx, you should finish the production setup.
+:::note
+If you used the automatic installer, all three services are already created and running. This page is for manual installations and reference.
+:::
 
-## Recommended `.env` values
+## Systemd services
 
-The default environment file is intentionally conservative. For production, the most common setup is:
+The panel needs three long-running processes in production:
 
-```dotenv
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://panel.example.com
-
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_DATABASE=skyport
-DB_USERNAME=skyport
-DB_PASSWORD=change-me
-
-CACHE_STORE=redis
-SESSION_DRIVER=redis
-QUEUE_CONNECTION=redis
-
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_PASSWORD=null
-
-LOG_CHANNEL=stack
-LOG_LEVEL=info
-
-OCTANE_SERVER=swoole
-```
-
-## Octane service
+### Octane (application server)
 
 Create `/etc/systemd/system/skyport-panel.service`:
 
 ```ini
 [Unit]
-Description=Skyport Panel (Laravel Octane)
+Description=Skyport Panel (Octane)
 After=network.target
 
 [Service]
-Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/skyport
-ExecStart=/usr/bin/php artisan octane:start --server=swoole --host=127.0.0.1 --port=8000 --workers=auto --task-workers=auto --max-requests=500
+ExecStart=/usr/bin/php artisan octane:start --server=swoole --host=127.0.0.1 --port=8000
+ExecReload=/usr/bin/php artisan octane:reload
 Restart=always
 RestartSec=5
-Environment=APP_ENV=production
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-## Queue worker service
+### Queue worker
 
 Create `/etc/systemd/system/skyport-queue.service`:
 
 ```ini
 [Unit]
 Description=Skyport Queue Worker
-After=network.target
+After=network.target skyport-panel.service
 
 [Service]
-Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/skyport
-ExecStart=/usr/bin/php artisan queue:work --tries=1 --timeout=0
+ExecStart=/usr/bin/php artisan queue:work --tries=3 --timeout=60
 Restart=always
 RestartSec=5
-Environment=APP_ENV=production
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-## Enable and start services
+### Inertia SSR
+
+Create `/etc/systemd/system/skyport-ssr.service`:
+
+```ini
+[Unit]
+Description=Skyport Inertia SSR
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/skyport
+ExecStart=/usr/bin/php artisan inertia:start-ssr
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Enable and start all three
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now skyport-panel.service skyport-queue.service
+sudo systemctl enable --now skyport-panel skyport-queue skyport-ssr
 ```
 
-## File ownership
+## Environment reference
 
-A safe baseline is to make the web user own the app directory:
+A complete production `.env` with all important values:
+
+```dotenv
+APP_NAME=Skyport
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://panel.example.com
+
+DB_CONNECTION=sqlite
+
+SESSION_DRIVER=database
+QUEUE_CONNECTION=database
+CACHE_STORE=database
+
+OCTANE_SERVER=swoole
+TRUSTED_PROXIES=*
+ASSET_URL=https://panel.example.com
+
+LOG_CHANNEL=stack
+LOG_LEVEL=info
+```
+
+### Using MySQL instead of SQLite
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=skyport
+DB_USERNAME=skyport
+DB_PASSWORD=your-password
+```
+
+### Using Redis for cache/sessions/queues
+
+If you want better performance on high-traffic panels, install Redis and set:
+
+```dotenv
+CACHE_STORE=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+```
+
+## Artisan commands
+
+### Create a user
 
 ```bash
-sudo chown -R www-data:www-data /var/www/skyport
+php artisan user:create --name="Admin" --email="admin@example.com" --password="Password" --admin --no-interaction
 ```
 
-## Useful maintenance commands
+Without `--no-interaction`, the command will prompt for each field interactively.
+
+### Configure the environment
+
+```bash
+php artisan environment:setup --url="https://panel.example.com" --db-connection=sqlite --no-interaction
+```
+
+### Maintenance mode
+
+```bash
+php artisan down    # enable maintenance mode
+php artisan up      # disable maintenance mode
+```
+
+### Clear caches
 
 ```bash
 php artisan optimize:clear
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
 ```
-
-Run those after major environment changes or deployments.
 
 ## Logging
 
-When debugging production issues, start with:
+Service logs:
 
 ```bash
-journalctl -u skyport-panel -u skyport-queue -f
+journalctl -u skyport-panel -f
+journalctl -u skyport-queue -f
+journalctl -u skyport-ssr -f
 ```
 
-And Laravel's application log:
+Application log:
 
 ```bash
 tail -f /var/www/skyport/storage/logs/laravel.log
 ```
-
-## Redis recommendations
-
-If you use Redis for cache, sessions, and queues, keep it local or private to your trusted network. Do not expose Redis directly to the internet.
-
-## Database recommendations
-
-Use PostgreSQL for production unless you have a strong reason not to. SQLite is fine for local development, but PostgreSQL will be a much better default for real deployments.

@@ -1,78 +1,83 @@
 ---
 title: Creating Your First Location and Node
-description: Set up the first region, node, configuration token, and allocations in Skyport.
+description: Set up a region, node, and allocations so you can start creating servers.
 ---
 
-Once the panel is online, the next job is to create somewhere for workloads to run.
+Once the panel is online, you need to create infrastructure before any servers can be deployed.
 
 ## 1. Create a location
 
-In the admin area, create a location for the region you want to represent.
-
-Typical examples:
+In the admin panel, go to **Locations** and create one for your region. Examples:
 
 - Frankfurt
 - Ashburn
-- Los Angeles
 - Singapore
 
-A location in Skyport is just a grouping for one or more nodes.
+A location is just a grouping label for one or more nodes.
 
 ## 2. Create a node
 
-When creating the node, fill in:
+Go to **Nodes** and create a new node:
 
-- **Name** — internal label for the machine
-- **Location** — the region you created above
-- **FQDN** — the public hostname for the daemon
-- **Daemon Port** — the API port the daemon will listen on
-- **SFTP Port** — the SFTP port exposed for that node
-- **Use SSL** — whether the daemon should serve TLS directly
+| Field | Description |
+| --- | --- |
+| **Name** | Internal label (e.g., "US East 01") |
+| **Location** | The region you just created |
+| **FQDN** | Public hostname for the daemon (e.g., `node1.example.com`) |
+| **Daemon Port** | API port the daemon listens on (default: 2800) |
+| **SFTP Port** | SFTP port for file access (default: 2022) |
+| **SSL** | Whether the daemon should use TLS |
 
 ## 3. Generate a configuration token
 
-After the node exists, generate its one-time configuration token from the node management screen.
+After creating the node, click on it to open its detail page, then generate a **configuration token**. You will paste this into `skyportd` during setup.
 
-You will paste this into `skyportd` during first boot.
+## 4. Install skyportd on the node
 
-## 4. Install `skyportd` on the node machine
+On the node machine, run the daemon installer:
 
-Follow [Installing skyportd](/daemon/installing/), using:
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/skyportsh/installer/main/install-daemon.sh)
+```
 
-- the panel URL
-- the node's configuration token
+When prompted, enter the panel URL and the configuration token you just generated.
 
-Once enrollment succeeds, the panel should begin recognizing the node as configured or online.
+For manual installation, see [Installing skyportd](/daemon/installing/).
 
-## 5. Add allocations
+## 5. Verify the node is online
 
-Next, create allocations for the node.
+After enrollment, the node should appear as **online** in the panel within a few seconds. If it stays offline:
 
-An allocation is a bind IP and port pair. For example:
+- Check `journalctl -u skyportd -f` on the node
+- Verify the FQDN resolves to the node's IP
+- Ensure the daemon port is open in your firewall
 
-- `0.0.0.0:25565`
-- `0.0.0.0:25566`
-- `0.0.0.0:27015`
+## 6. Add allocations
 
-These are the ports your future servers will actually claim.
+Go to the node's detail page and switch to the **Allocations** tab. Create one or more allocations:
 
-## 6. Confirm connectivity
+| Bind IP | Port | Description |
+| --- | --- | --- |
+| `0.0.0.0` | `25565` | Minecraft default |
+| `0.0.0.0` | `25566` | Second server |
+| `0.0.0.0` | `27015` | Source engine |
 
-A healthy first node usually has all of the following true:
-
-- the panel can load the node page without errors
-- the daemon service is running under `systemd`
-- `journalctl -u skyportd -f` shows successful enrollment and heartbeats
-- firewall rules allow the configured daemon and SFTP ports
-- Docker is installed and usable on the node host
+You can create single ports or port ranges.
 
 ## 7. Create your first server
 
-Once allocations exist, you can create a server against:
+Go to **Servers** and click **Create**. You need:
 
-- one user
-- one node
-- one allocation
-- one cargo
+- A **user** (the server owner)
+- A **node** (the one you just set up — must be online)
+- An **allocation** (from the node)
+- A **cargo** (the server type — e.g., Paper, Vanilla)
+- Resource limits (memory, CPU, disk)
 
-If server creation fails, double-check that the node is enrolled and that the allocation belongs to that node.
+The panel will sync the server to the daemon, which creates the Docker container and runs the installation.
+
+## Troubleshooting
+
+- **"Node is not online"** when creating a server — the daemon isn't connected. Check `systemctl status skyportd`.
+- **No allocations available** — you need to create allocations on the node first.
+- **Server stuck on "Installing"** — check the daemon logs: `journalctl -u skyportd -f`

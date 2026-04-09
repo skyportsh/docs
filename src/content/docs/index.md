@@ -18,44 +18,57 @@ If you have used Pterodactyl before, the flow is familiar: install the panel fir
 | skyportd | Node enrollment, runtime sync, Docker orchestration, websocket and API handling | Rust |
 | Runtime | The actual game server containers | Docker |
 
-## Recommended production stack
+## Quick start
 
-Skyport is still easy to run, but production deployments should follow a fairly standard stack:
+The fastest way to get Skyport running is with the automatic installers:
 
-- **Ubuntu 24.04 LTS** or **Debian 12**
-- **Nginx** as a reverse proxy
-- **PHP 8.4** with required extensions
-- **Composer 2**
-- **Bun 1.3+** for frontend builds
-- **PostgreSQL 16+** for the primary database
-- **Redis 7+** for cache, sessions, and queues
-- **Laravel Octane + Swoole** for serving the panel
-- **Docker Engine** on every node running `skyportd`
+```bash
+# Install the panel
+bash <(curl -fsSL https://raw.githubusercontent.com/skyportsh/installer/main/install-panel.sh)
 
-## Before you begin
+# Install the daemon (on a node machine)
+bash <(curl -fsSL https://raw.githubusercontent.com/skyportsh/installer/main/install-daemon.sh)
+```
 
-Make sure you are comfortable with:
+The installers handle all dependencies, configuration, SSL, and service setup interactively. They support **Ubuntu 22.04/24.04** and **Debian 11/12/13**.
 
-- basic Linux administration
-- DNS records and reverse proxies
-- service management with `systemd`
-- opening and restricting firewall ports
-- reading logs when something goes wrong
+If you prefer a manual installation, follow the step-by-step guides below.
+
+## Supported operating systems
+
+| OS | Versions |
+| --- | --- |
+| Ubuntu | 22.04 LTS, 24.04 LTS |
+| Debian | 11, 12, 13 |
+
+## Production stack
+
+| Component | Details |
+| --- | --- |
+| PHP | 8.4 with Swoole extension |
+| Web server | Nginx (reverse proxy to Octane) |
+| App server | Laravel Octane + Swoole |
+| SSR | Inertia SSR (Node.js) |
+| Frontend | Bun for builds, React + Vite |
+| Database | SQLite (default) or MySQL/MariaDB |
+| Queue/Cache | Database driver (default) or Redis |
+| Daemon | Rust binary — x86_64, aarch64, riscv64 |
+| Containers | Docker Engine on each node |
 
 ## Recommended order
 
-1. Read [About](/project/about/)
-2. Install the [Panel](/panel/getting-started/)
-3. Configure your [webserver](/panel/webserver-configuration/)
+1. Read [About](/project/about/) to understand the architecture
+2. Install the [Panel](/panel/getting-started/) (automatic or manual)
+3. Configure your [webserver](/panel/webserver-configuration/) (manual installs only)
 4. Create your first [location and node](/guides/first-location-and-node/)
-5. Install [skyportd](/daemon/installing/)
-6. Finish TLS and production hardening
+5. Install [skyportd](/daemon/installing/) on your node machine
+6. Create your first server
 
 ## Important note on versions
 
-Skyport panel and `skyportd` should be kept on matching release lines. The daemon validates panel compatibility during enrollment, so avoid mixing arbitrary versions across nodes and the panel.
+The panel and `skyportd` should be kept on matching release lines. The daemon validates panel compatibility during enrollment, so avoid mixing arbitrary versions.
 
 ## Need help?
 
 - GitHub: [github.com/skyportsh](https://github.com/skyportsh)
-- Support: [Skyport Discord](https://discord.gg/PUuezaSqkY)
+- Discord: [discord.gg/PUuezaSqkY](https://discord.gg/PUuezaSqkY)

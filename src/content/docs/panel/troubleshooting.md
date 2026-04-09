@@ -1,101 +1,123 @@
 ---
 title: Troubleshooting
-description: Common Skyport panel issues and the first places to look.
+description: Common panel issues and how to fix them.
 ---
 
-This page covers common panel-side problems.
+## 502 Bad Gateway
 
-## 502 Bad Gateway from Nginx
-
-Usually this means Octane is not running or not listening where Nginx expects it.
-
-Check:
+Octane is not running or not listening where Nginx expects.
 
 ```bash
-sudo systemctl status skyport-panel.service
-journalctl -u skyport-panel -n 100 --no-pager
+systemctl status skyport-panel
+journalctl -u skyport-panel -n 50
 ss -ltnp | grep 8000
 ```
 
-## Assets look broken after an update
+## Assets not loading / mixed content errors
 
-Rebuild frontend assets and clear caches:
+This almost always means `ASSET_URL` or `TRUSTED_PROXIES` is not set correctly in `.env`:
+
+```dotenv
+APP_URL=https://panel.example.com
+ASSET_URL=https://panel.example.com
+TRUSTED_PROXIES=*
+```
+
+After changing `.env`, restart Octane and SSR:
 
 ```bash
-bun install --frozen-lockfile
-bun run build
+systemctl restart skyport-panel skyport-ssr
+```
+
+## Blank page with no errors
+
+The SSR service may not be running or the SSR bundle may be missing:
+
+```bash
+systemctl status skyport-ssr
+journalctl -u skyport-ssr -n 20
+```
+
+If you see "Inertia SSR bundle not found", rebuild assets with:
+
+```bash
+bun run build:ssr
+systemctl restart skyport-ssr
+```
+
+## Assets broken after an update
+
+Rebuild and clear caches:
+
+```bash
+bun install
+bun run build:ssr
 php artisan optimize:clear
+systemctl restart skyport-panel skyport-ssr
 ```
 
-## Queue jobs are stuck
-
-Check the queue worker service:
+## Queue jobs stuck
 
 ```bash
-sudo systemctl status skyport-queue.service
-journalctl -u skyport-queue -n 100 --no-pager
+systemctl status skyport-queue
+journalctl -u skyport-queue -n 50
 ```
 
-If you are using Redis, also verify Redis is reachable.
+Restart the worker:
+
+```bash
+systemctl restart skyport-queue
+```
 
 ## Database connection errors
 
-Verify:
-
-- `DB_CONNECTION=pgsql`
-- host, port, username, and password are correct
-- PostgreSQL is listening
-- the `skyport` database exists
-
-A quick connectivity check can save time:
+Verify your `.env` settings match your actual database:
 
 ```bash
-php artisan tinker
+php artisan tinker --execute "DB::connection()->getPdo(); echo 'OK';"
 ```
 
-```php
-DB::connection()->getPdo();
-```
-
-## Login, cookies, or CSRF issues behind a proxy
-
-Usually one of these is wrong:
-
-- `APP_URL`
-- forwarded HTTPS headers
-- inconsistent domain names between browser and panel config
-
-## The panel loads, but nodes stay offline
-
-That is usually a daemon-side issue, not a panel rendering issue.
-
-Check:
-
-- that the node was enrolled successfully
-- that the daemon secret was stored
-- that the node FQDN and ports are correct
-- that the daemon can reach the panel URL
-
-## Useful logs
-
-Panel application log:
+For SQLite, make sure the file exists and is writable by `www-data`:
 
 ```bash
+ls -la database/database.sqlite
+```
+
+## Login or CSRF errors behind a proxy
+
+Check that:
+
+- `APP_URL` matches the URL in your browser exactly
+- `TRUSTED_PROXIES=*` is set
+- Your proxy passes `X-Forwarded-Proto` and `X-Forwarded-For` headers
+
+## Nodes always show as offline
+
+This is usually a daemon-side issue, not a panel problem:
+
+- Check that `skyportd` is running on the node
+- Verify the node was enrolled successfully
+- Confirm the FQDN and ports are correct
+- Make sure the daemon can reach the panel URL
+
+## Useful log locations
+
+```bash
+# Service logs
+journalctl -u skyport-panel -f
+journalctl -u skyport-queue -f
+journalctl -u skyport-ssr -f
+
+# Application log
 tail -f /var/www/skyport/storage/logs/laravel.log
 ```
 
-Systemd service logs:
-
-```bash
-journalctl -u skyport-panel -u skyport-queue -f
-```
-
-## If you still need help
+## Getting help
 
 When asking for help, include:
 
-- your panel version
-- your `skyportd` version
-- relevant logs
-- your OS version
-- whether the issue happens during install, enrollment, or runtime
+- Panel version (check `composer.json`)
+- `skyportd` version (`skyportd --help`)
+- OS and version
+- Relevant log output
+- Steps to reproduce

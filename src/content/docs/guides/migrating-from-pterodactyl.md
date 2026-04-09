@@ -64,11 +64,11 @@ Server files live on the node machines. To migrate them from Wings to skyportd:
 
 ```bash
 # On each node, copy the server volumes
-# Wings default: /srv/daemon-data/<server-uuid>/
+# Wings default: /var/lib/pterodactyl/volumes/<server-uuid>/
 # skyportd default: /etc/skyportd/volumes/<server-id>/
 
 # Example for a server with ID 1:
-cp -a /srv/daemon-data/<pterodactyl-server-uuid>/ /etc/skyportd/volumes/1/
+cp -a /var/lib/pterodactyl/volumes/<pterodactyl-server-uuid>/ /etc/skyportd/volumes/1/
 chown -R root:root /etc/skyportd/volumes/1/
 ```
 

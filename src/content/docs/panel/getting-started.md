@@ -38,7 +38,7 @@ If you prefer to install everything yourself, follow the steps below.
 
 ### Requirements
 
-- **Ubuntu 22.04/24.04** or **Debian 11/12/13**
+- **Ubuntu 24.04** or **Debian 13**
 - **PHP 8.4** with extensions: cli, curl, mbstring, xml, zip, bcmath, sqlite3, mysql, swoole, gd, intl
 - **Composer 2**
 - **Bun 1.3+**

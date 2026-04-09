@@ -30,7 +30,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/skyportsh/installer/main/ins
 bash <(curl -fsSL https://raw.githubusercontent.com/skyportsh/installer/main/install-daemon.sh)
 ```
 
-The installers handle all dependencies, configuration, SSL, and service setup interactively. They support **Ubuntu 22.04/24.04** and **Debian 11/12/13**.
+The installers handle all dependencies, configuration, SSL, and service setup interactively. They support **Ubuntu 24.04** and **Debian 13**.
 
 If you prefer a manual installation, follow the step-by-step guides below.
 
@@ -38,8 +38,8 @@ If you prefer a manual installation, follow the step-by-step guides below.
 
 | OS | Versions |
 | --- | --- |
-| Ubuntu | 22.04 LTS, 24.04 LTS |
-| Debian | 11, 12, 13 |
+| Ubuntu | 24.04 LTS |
+| Debian | 13 |
 
 ## Production stack
 

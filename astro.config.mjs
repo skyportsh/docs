@@ -59,6 +59,7 @@ export default defineConfig({
 					label: 'Guides',
 					items: [
 						{ label: 'Creating Your First Location and Node', slug: 'guides/first-location-and-node' },
+						{ label: 'Migrating from Pterodactyl', slug: 'guides/migrating-from-pterodactyl' },
 					],
 				},
 			],

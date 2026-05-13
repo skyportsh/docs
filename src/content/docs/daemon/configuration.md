@@ -34,6 +34,7 @@ In normal usage, you do **not** need to manually edit these files. The daemon wr
 | `uuid` | Daemon UUID (set during enrollment) | `00000000-...` |
 | `tick_interval` | Internal tick interval | `5s` |
 | `shutdown_timeout` | Graceful shutdown timeout | `30s` |
+| `allow_private_webhooks` | Allow workflow webhooks to target private/internal IPs | `false` |
 
 ### `[panel]`
 
@@ -57,6 +58,21 @@ Use `json` format for centralized logging systems.
 ### `[node]`
 
 Node-specific settings received from the panel: hostname, ports, SSL mode, TLS paths. Written automatically during enrollment.
+
+### Webhook SSRF protection
+
+Workflow webhook actions are blocked from targeting private/internal IPs by default
+(`allow_private_webhooks = false`). This prevents malicious workflows from accessing
+internal services (metadata endpoints, Redis, internal APIs, etc.).
+
+Set to `true` in your local config if you run a single-tenant setup and need webhooks
+to reach local services:
+
+```toml
+# config/local.toml
+[daemon]
+allow_private_webhooks = true
+```
 
 ## Environment variable overrides
 
